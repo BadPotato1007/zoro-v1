@@ -1,0 +1,11 @@
+colorama==0.4.6
+mss==9.0.1
+numpy==2.3.1
+opencv-python==4.9.0.80
+psutil==5.4.6
+pynput==1.7.6
+pyperclip==1.8.2
+python-socketio==5.13.0
+requests==2.32.4
+sounddevice==0.4.6
+scipy==1.16.0
