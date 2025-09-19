@@ -39,7 +39,5 @@ jobs:
               name: zoro-visible
               path: |
                 build/*.exe
-                build/*.bin
-                build/*.app/**/*
-                build/*.dist/**/*
+
               include-hidden-files: true
