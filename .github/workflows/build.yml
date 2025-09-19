@@ -34,7 +34,7 @@ jobs:
           nuitka-version: main
           script-name: agent.py
           mode: onefile
-          nuitka-options: "--windows-console-mode=disable" # Key option here
+          nuitka-options: "disable-console" # Key option here
 
 
     - name: Upload Artifacts
