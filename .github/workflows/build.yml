@@ -19,8 +19,9 @@ jobs:
       with:
         python-version: "3.12"
 
-    - name: Install Nuitka + dependencies
+    - name: Install UPGADE SETUP TOOLS AND WHEEL + Nuitka + dependencies
       run: |
+        python -m pip install --upgrade pip setuptools wheel
         python -m pip install python-socketio python-engineio requests psutil pynput opencv-python mss numpy pyperclip zstandard nuitka
 
     - name: Compile with Nuitka
