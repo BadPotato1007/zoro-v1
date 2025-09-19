@@ -6,3 +6,4 @@ opencv-python
 mss
 numpy
 pyperclip
+websocket-client
