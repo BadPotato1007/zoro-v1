@@ -12,25 +12,38 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.12"
+        cache: 'pip'
+        cache-dependency-path: |
+            **/requirements*.txt
 
     - name: Install Nuitka + dependencies
       run: |
-        pip install nuitka zstandard
+        pip install nuitka
         python -m pip install --upgrade pip setuptools wheel
         pip install python-socketio requests psutil pynput opencv-python mss numpy pyperclip
 
-    - name: Compile with Nuitka
-      run: |
-        python -m nuitka agent.py --onefile --python-flag=-OO --assume-yes-for-downloads --include-package=socketio --include-package=engineio --include-package=requests --include-package=psutil --include-package=pynput --include-package=cv2 --include-package=mss --include-package=numpy --include-package=pyperclip --include-package=uuid
+    - name: Build Executable
+      uses: Nuitka/Nuitka-Action@main
+      with:
+          nuitka-version: main
+          script-name: agent.py
+          mode: onefile
 
-    - name: Upload EXE artifact
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-exe
-        path: agent.exe
+              name: windows-latest Build
+              path: |
+                build/*.exe
+                build/*.bin
+                build/*.app/**/*
+                build/*.dist/**/*
+              include-hidden-files: true
+
+
