@@ -1,0 +1,37 @@
+name: Build Windows EXE with Nuitka
+
+on:
+  workflow_dispatch:   # lets you trigger manually
+  push:
+    branches:
+      - main           # runs automatically on push to main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install Nuitka + dependencies
+      run: |
+        pip install nuitka zstandard
+
+    - name: Compile with Nuitka
+      run: |
+        python -m nuitka --onefile --windows-disable-console --remove-output ^
+               --lto=yes --clang --assume-yes-for-downloads --jobs=4 ^
+               --static-libpython=yes --python-flag=-OO ^
+               agent.py
+
+    - name: Upload EXE artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-exe
+        path: agent.exe
