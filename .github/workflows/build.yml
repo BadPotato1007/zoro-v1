@@ -1,4 +1,4 @@
-name: Build Windows EXE with Nuitka --visible
+name: Build Windows EXE with Nuitka --invisible
 
 on:
   workflow_dispatch:   # Trigger manually
@@ -39,11 +39,6 @@ jobs:
               name: zoro-hidden
               path: |
                 build/*.exe
-                build/*.bin
-                build/*.app/**/*
-                build/*.dist/**/*
+
               include-hidden-files: true
 
-
-                build/*.dist/**/*
-              include-hidden-files: true
