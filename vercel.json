@@ -1,5 +1,13 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/server" }
-  ]
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "env": {
+    "FLASK_APP": "server.py",
+    "FLASK_ENV": "development"
+  }
 }
