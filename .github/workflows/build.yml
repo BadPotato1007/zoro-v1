@@ -34,7 +34,7 @@ jobs:
 
       - name: Build EXE with Nuitka
         run: |
-          nuitka --onefile --windows-console-mode=disable --remove-output --lto=yes --assume-yes-for-downloads --jobs=4 --python-flag=-OO agent.py
+          python --m nuitka --onefile --windows-console-mode=disable --remove-output --lto=yes --assume-yes-for-downloads --jobs=4 --python-flag=-OO agent.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
