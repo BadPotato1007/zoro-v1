@@ -25,7 +25,7 @@ jobs:
       run: |
         pip install nuitka
         python -m pip install --upgrade pip setuptools wheel
-        pip install python-socketio requests psutil pynput opencv-python mss numpy pyperclip
+        pip install python-socketio requests psutil pynput websocket-client opencv-python mss numpy pyperclip
     - name: Build Executable
       uses: Nuitka/Nuitka-Action@main
       with:
