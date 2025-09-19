@@ -1,35 +1,44 @@
-name: Build Windows EXE with Nuitka
+name: Build Windows EXE
 
 on:
-  workflow_dispatch:   # Trigger manually
   push:
-    branches:
-      - main           # Automatically runs on push to main
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.12"
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+          update-environment: true
 
-    - name: Install UPGADE SETUP TOOLS AND WHEEL + Nuitka + dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        python -m pip install python-socketio python-engineio requests psutil pynput opencv-python mss numpy pyperclip zstandard nuitka
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
 
-    - name: Compile with Nuitka
-      run: |
-        python -m nuitka agent.py --onefile --python-flag=-OO --include-package=socketio --include-package=engineio --include-package=requests --include-package=psutil --include-package=pynput --include-package=cv2 --include-package=mss --include-package=numpy --include-package=pyperclip --include-package=uuid
+      - name: Cache Nuitka
+        uses: actions/cache@v3
+        with:
+          path: C:\Users\runneradmin\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-cache-${{ runner.os }}-${{ hashFiles('**/agent.py') }}
+          restore-keys: |
+            nuitka-cache-${{ runner.os }}-
 
-    - name: Upload EXE artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-exe
-        path: agent.exe
+      - name: Build EXE with Nuitka
+        run: |
+          nuitka --onefile --windows-console-mode=disable --remove-output \
+          --lto=yes --assume-yes-for-downloads --jobs=4 --python-flag=-OO agent.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: agent.exe
