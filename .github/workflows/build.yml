@@ -21,11 +21,11 @@ jobs:
 
     - name: Install Nuitka + dependencies
       run: |
-        pip install nuitka zstandard
+        python -m pip install python-socketio python-engineio requests psutil pynput opencv-python mss numpy pyperclip zstandard nuitka
 
     - name: Compile with Nuitka
       run: |
-        nuitka agent.py --onefile --python-flag=-OO --include-package=socketio --include-package=engineio --include-package=requests --include-package=psutil --include-package=pynput --include-package=cv2 --include-package=mss --include-package=numpy --include-package=pyperclip --include-package=uuid
+        python -m nuitka agent.py --onefile --python-flag=-OO --include-package=socketio --include-package=engineio --include-package=requests --include-package=psutil --include-package=pynput --include-package=cv2 --include-package=mss --include-package=numpy --include-package=pyperclip --include-package=uuid
 
     - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
