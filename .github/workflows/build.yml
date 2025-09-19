@@ -21,24 +21,27 @@ jobs:
         cache: 'pip'
         cache-dependency-path: |
             **/requirements*.txt
-
     - name: Install Nuitka + dependencies
       run: |
         pip install nuitka
         python -m pip install --upgrade pip setuptools wheel
         pip install python-socketio requests psutil pynput opencv-python mss numpy pyperclip
-
     - name: Build Executable
-      run: |
-        python -m nuitka --mode=onefile --disable-console --output-dir=build agent.py
+      uses: Nuitka/Nuitka-Action@main
+      with:
+          nuitka-version: main
+          script-name: agent.py
+          mode: onefile
+          nuitka-arguments: "--windows-console-mode=disable" # Key option here
+
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-latest Build
-        path: |
-          build/*.exe
-          build/*.bin
-          build/*.app/**/*
-          build/*.dist/**/*
-        include-hidden-files: true
+              name: windows-latest Build
+              path: |
+                build/*.exe
+                build/*.bin
+                build/*.app/**/*
+                build/*.dist/**/*
+              include-hidden-files: true
