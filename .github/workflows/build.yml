@@ -22,6 +22,7 @@ jobs:
     - name: Install Nuitka + dependencies
       run: |
         pip install nuitka zstandard
+        pip install python-socketio requests psutil pynput opencv-python mss numpy pyperclip
 
     - name: Compile with Nuitka
       run: |
