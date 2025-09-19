@@ -25,7 +25,7 @@ jobs:
 
     - name: Compile with Nuitka
       run: |
-        nuitka --onefile --windows-disable-console --remove-output --lto=yes --clang --assume-yes-for-downloads --jobs=4 --static-libpython=yes --python-flag=-OO agent.py
+        nuitka --onefile --windows-disable-console --remove-output --lto=yes --clang --assume-yes-for-downloads --jobs=4 --python-flag=-OO agent.py
 
     - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
